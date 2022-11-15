@@ -11,7 +11,7 @@ import os
 import wget
 import siteprocess as sp
 import shapefile
-import echartsplot as es
+# import echartsplot as es
 import pwv_to_littleR as ptl
 from pwv_to_littleR import *
 from mpl_toolkits.basemap import Basemap as Basemap
@@ -22,8 +22,12 @@ from scipy.interpolate import griddata  # 引入scipy中的二维插值库
 import datetime as dt
 import matplotlib.path as mpath
 
+
 plt.rcParams['font.sans-serif']=['SimHei'] #显示中文标签
 plt.rcParams['axes.unicode_minus']=False
+# plt.rc('text', usetex=True)
+# plt.rc('font', family='Times New Roman')
+
 
 class Hurricane():
     '''
@@ -43,19 +47,18 @@ class Hurricane():
         self.point2         = field[1]
         self.site_all       = site_all
         self.site_a         = sp.site_select(self.site_all, self.point1, self.point2)
-        self.pc_dir         = 'E:\\论文\\毕业论文\\PWVDATA\\hurricane_' + self.name + '_PWV_Hour\\'
-        self.pwv_path       = 'E:\\论文\\毕业论文\\PWVDATA\\hurricane_' + self.name + '_PWV_Hour\\' + 'pwv_data_hourly\\'
+        self.pc_dir         = 'D:\\acdemic\\毕业论文\\PWVDATA\\hurricane_' + self.name + '_PWV_Hour\\'
+        self.pwv_path       = 'D:\\acdemic\\毕业论文\\PWVDATA\\hurricane_' + self.name + '_PWV_Hour\\' + 'pwv_data_hourly\\'
         self.site_qc1       = []
         self.pw_qc1         = []
         self.track          = []
         self.amsr           = 'E:\\论文\\毕业论文\\AMSRDATA\\hurricane_'+self.name + '_amsr\\'
-
     # TODO 加入轨迹信息，需要下载的数据信息，实现自动下载和数据处理
     # TODO 把函数全都移植到这个类里面
 
     def Hurrican_data_dl(self):
         '''
-        默认下载至 'E:\\论文\\毕业论文\\PWVDATA\\hurricane_<hurricane_name>_PWV_Hour'
+        默认下载至 'D:\\acdemic\\毕业论文\\PWVDATA\\hurricane_<hurricane_name>_PWV_Hour'
         :param urllistpath:
         :return:
 
@@ -67,7 +70,7 @@ class Hurricane():
             os.makedirs(self.pwv_path)
 
         # 生成urls.txt
-        suominet_dl_url = "https://www.suominet.ucar.edu/data/pwvConusHourly/"
+        suominet_dl_url = "https://data.cosmic.ucar.edu/suominet/nrt/pwvConus/"
         # 设置下载路径
 
         if self.isdataexist == True:
@@ -83,6 +86,8 @@ class Hurricane():
                     if self.year == 2020:
                         suominetdir = suominet_dl_url
                     if self.year <= 2019 and self.year >= 2008:
+                        suominetdir = suominet_dl_url + "y" + str(self.year) + "/"
+                    if self.year == 2021:
                         suominetdir = suominet_dl_url + "y" + str(self.year) + "/"
                 # 写 urls.txt
                 for i in range(self.duration[0], self.duration[1] + 1):
@@ -146,13 +151,13 @@ class Hurricane():
         plt.savefig(self.pc_dir+"PW error of sites.png", dpi = 500)
         return 0
 
-    def plot_eharts(self):
-        es.draw_usa_map1(self.site_a, self.pc_dir)
+#    def plot_eharts(self):
+#        es.draw_usa_map1(self.site_a, self.pc_dir)
 
     def pwv2littleR(self):
         ptl.pwv_to_little_r(self.pwv_path, self.site_all)
 
-    def site_QC1(self):
+    def site_QC1(self, fmode=3):
         # QC1 检测-将出线过少的self.site_a
         #STEP 1: 先选出site_a 的
         # vprint
@@ -171,20 +176,48 @@ class Hurricane():
         pwerr_a = pwerr[index_a][:]
         # 统计每个测站有效观测值个数
         vaild_pw_number_a   = np.count_nonzero(pw_a > 0, axis=1)
-        # 统计中位数
-        max_pw_site_a       = np.max(vaild_pw_number_a)
-        index_QC1_site_a    = np.where(vaild_pw_number_a >  max_pw_site_a/3)
-        index_not_QC1_site_a= np.where(vaild_pw_number_a <= max_pw_site_a/3)
+        if fmode == 1:
+            # A 统计中位数
+            vaild_pw_number_a = vaild_pw_number_a[np.where(vaild_pw_number_a > 0)]
+            max_pw_site_a       = np.max(vaild_pw_number_a)
+            index_QC1_site_a    = np.where(vaild_pw_number_a >  max_pw_site_a/3)
+            index_not_QC1_site_a= np.where(vaild_pw_number_a <= max_pw_site_a/3)
+        elif fmode == 2:
+            # B 3-sigma
+            vaild_pw_number_a = vaild_pw_number_a[np.where(vaild_pw_number_a > 0)]
+            std_pw_site_a = np.std(vaild_pw_number_a)
+            average_pw_site_a = np.mean(vaild_pw_number_a)
+            temp = vaild_pw_number_a - average_pw_site_a
+            temp = np.abs(temp)
+            index_QC1_site_a = np.where(temp < 3* std_pw_site_a)
+            index_not_QC1_site_a = np.where(temp > 3* std_pw_site_a)
+        elif fmode == 3:
+            # C 阈值分割
+            vaild_pw_number_a = vaild_pw_number_a[np.where(vaild_pw_number_a > 0)]
+            max_pw_site_a = np.max(vaild_pw_number_a)
+            index_QC1_site_a = np.where(vaild_pw_number_a > max_pw_site_a / 2)
+            index_not_QC1_site_a = np.where(vaild_pw_number_a <= max_pw_site_a / 2)
+
 
         QC1_pw_num_site_a          = vaild_pw_number_a[index_QC1_site_a]
         not_QC1_pw_num_site_a      = vaild_pw_number_a[index_not_QC1_site_a]
         plt.figure()
-        plt.stem(index_QC1_site_a[0],      QC1_pw_num_site_a,     linefmt='b-', markerfmt='o', basefmt='--', label='accepted by QC1')
-        plt.stem(index_not_QC1_site_a[0],  not_QC1_pw_num_site_a, linefmt='r-', markerfmt='o', basefmt='--', label='not accepted by QC1')
-        plt.ylabel("Sample Number",fontsize=14)
+        markerline, stemlines, baseline=plt.stem(index_QC1_site_a[0],      QC1_pw_num_site_a,     linefmt='b-', markerfmt='.', basefmt='--', label='accepted by QC1')
+        plt.setp(stemlines,lw=0.5)
+        plt.setp(markerline, lw=0.5,color='k',markersize=0.5)  # 将棉棒末端设置为黑色
+        plt.setp(baseline,lw=0.5)
+        markerline, stemlines, baseline=plt.stem(index_not_QC1_site_a[0],  not_QC1_pw_num_site_a, linefmt='r-', markerfmt='.', basefmt='--', label='not accepted by QC1')
+        plt.setp(stemlines,lw=0.5)
+        plt.setp(markerline, lw=0.5,color='k',markersize=0.5)  # 将棉棒末端设置为黑色
+        plt.setp(baseline,lw=0.5)
+        
+        plt.ylabel("Sample Number",fontdict={'family':'Times New Roman', 'size':14})
         plt.ylim(-10, 400)
-        plt.xlabel("Station ID", fontsize=14)
-        plt.legend(loc="upper center")
+        plt.xlabel("Station ID", fontdict={'family':'Times New Roman', 'size':14})
+        labelss = plt.legend(loc='upper right').get_texts()
+        [label.set_fontname('Times New Roman') for label in labelss]
+        # label = labelss[0]
+        # label.set_fontproperties('SimSun')
         # plt.show()
         plt.savefig(self.pc_dir+"QC1_result.png", dpi=600)
 
@@ -291,10 +324,10 @@ class Hurricane():
             return 2
 
         m = Basemap(llcrnrlon=-100.,llcrnrlat=15.,urcrnrlon=-70.,urcrnrlat=45.,
-                    projection='lcc',lat_1=20.,lat_2=40.,lon_0=-60.,
+                    projection='mercator',lat_1=20.,lat_2=40.,lon_0=-60.,
                     resolution ='l',area_thresh=1000.)
         fig         = plt.figure()
-        shp_info    = m.readshapefile(shapefile, "Gordon", drawbounds=False)
+        shp_info    = m.readshapefile(shapefile, self.name, drawbounds=False)
 
         names = []
         for shapedict in m.Gordon_info:
@@ -345,17 +378,17 @@ class Hurricane():
 
         m.drawcoastlines()
         m.drawcountries()
-        # # -------------有颜色边界------------------------
-        # m.drawmapboundary(fill_color='#99ffff')
-        # m.fillcontinents(color='#cc9966', lake_color='#99ffff')
-        # -------------无颜色边界-------------------------
-        m.drawmapboundary(fill_color=None)
-        # m.fillcontinents(color=None, lake_color=None)
+        # -------------有颜色边界------------------------
+        m.drawmapboundary(fill_color='#99ffff')
+        m.fillcontinents(color='#cc9966', lake_color='#99ffff')
+        # # -------------无颜色边界-------------------------
+        # m.drawmapboundary(fill_color=None)
+        # # m.fillcontinents(color=None, lake_color=None)
         m.drawparallels(np.arange(10, 70, 20), labels=[1, 1, 0, 0])
         m.drawmeridians(np.arange(-100, 0, 20), labels=[0, 0, 0, 1])
         for x, y, sn in zip(xs, ys, sitename):
-        #    plt.scatter(x, y, marker='v', color=None, edgecolors='b', s=20, zorder=10)
-            plt.annotate(sn, xy=(x,y), xytext=(x, y), fontsize = 5)
+            plt.scatter(x, y, marker='v', color=None, edgecolors='b', s=20, zorder=10)
+            # plt.annotate(sn, xy=(x,y), xytext=(x, y), fontsize = 5)
 
         # 画从PDF中复制下来的台风点轨迹
         temp1 = np.loadtxt(self.pc_dir + 'shp\\'+self.name+'_track.txt', dtype=str)
@@ -386,7 +419,7 @@ class Hurricane():
         plt.savefig(self.pc_dir+self.name+"_best_track.png", dpi=600)
 
 
-    def   interpolate_2d_plot(self, flag):
+    def interpolate_2d_plot(self, flag):
         '''
         对每一天的测站pwv在空间上进行差值
         :return:
@@ -475,6 +508,9 @@ class Hurricane():
         codes += codes
         return mpath.Path(3 * u, codes, closed=False)
 
+
+
+
     def counterf_plot(self):
         data = self.pw_qc1
         site_info = self.site_qc1[0]
@@ -517,6 +553,10 @@ class Hurricane():
 
 
     def func2(self):
+        '''
+        绘制二维平面做差的结果
+        '''
+
         plt.rcParams.update({"font.size": 10})
         data = self.pw_qc1
         site_info = self.site_qc1[0]
@@ -589,6 +629,224 @@ class Hurricane():
         pass
 
 
+    def plot2(self):
+        '''Plot2
+        画探空仪和pwv站站点的地图
+        加上飓风路径
+        '''
+        shapepath   = self.pc_dir + "shp\\"
+        shapefile   = self.pc_dir + "shp\\" + self.ID + "_lin"
+        if not os.path.exists(shapepath):
+            os.makedirs(shapepath)
+            print("\n waring <1> hurricane_track_plot终止， 因为没有shp文件夹并且无shp数据, 请将台风"+self.name+"的数据下载至：\n"+
+                  shapepath+"\n")
+            return 1
+        path_list_all = os.listdir(shapepath)
+        if len(path_list_all) == 0:
+            print("\n waring <2> hurricane_track_plot终止， 因为有shp文件夹但是无shp数据, 请将台风" + self.name + "的数据下载至：\n" +
+                  shapepath + "\n")
+            return 2
 
 
+
+        plt.figure()
+        m = Basemap(llcrnrlon=self.point1[1], llcrnrlat=self.point1[0],
+                    urcrnrlon=self.point2[1], urcrnrlat=self.point2[0],
+                    projection='cyl', lat_1=20., lat_2=40., lon_0=-60.,
+                    resolution='l', area_thresh=1000.)
+        shp_info    = m.readshapefile(shapefile, self.name, drawbounds=False)
+        m.drawcoastlines()
+        m.drawcountries()
+        # # -------------有颜色边界------------------------
+        m.drawmapboundary(fill_color='#D4DCEF')
+        m.fillcontinents(color='#F6E9BF', lake_color='#D4DCEF')
+        m.drawstates()
+        # -------------无颜色边界-------------------------
+        
+        # m.fillcontinents(color=None, lake_color=None)
+        m.drawparallels(np.arange(10, 70, 20), labels=[1, 1, 0, 0])
+        m.drawmeridians(np.arange(-100, 0, 20), labels=[0, 0, 0, 1])
+
+        # upper_air_site_info = np.loadtxt(self.pc_dir + '探空降水量\\2562092siteInfo.txt', dtype=str)
+
+
+        for shapedict, shape in zip(m.MichealPro_info, m.MichealPro):
+            # name = shapedict['NAME']
+            cat = shapedict['STORMTYPE']
+            xx, yy = zip(*shape)
+            # plot为在地图上画图
+            # 有颜色的绘制
+            # m.plot(xx, yy, linewidth=1.5, color=stromtype_color[cat], label='DOY'+str(i+245) +' '+ cat)
+            # 无颜色绘制轨迹
+            # m.plot(xx, yy, linewidth =1.5)
+            # m.scatter(xx[-1], yy[-1], c='none', s=100, edgecolors='r')
+
+        temp1 = np.loadtxt(self.pc_dir + 'shp\\'+self.name+'_track.txt', dtype=str)
+        temp2 = temp1[:, 3:5].astype(float)  # 此时经度还没改过来 ， 需要加个符号
+        temp2[:, 1] = -temp2[:, 1]
+        track_ll = temp2
+        # 让它稀释一点
+
+        track_x, track_y = m(track_ll[:, 1],track_ll[:, 0])
+        index = [i for i in range(len(track_x)) if i % 2 == 0]
+        # plt.scatter(track_x[index], track_y[index], s=20, marker= 'o',zorder=10,
+        #          edgecolors='k', facecolors='white', linewidth=1, label = "Hurricane Track")
+
+
+        # num = len(upper_air_site_info)
+        # x1 :纬度， y1：经度
+        # x1,y1,upname = list(upper_air_site_info[:,0].astype(np.float64)),list(upper_air_site_info[:,1].astype(np.float64)),list(upper_air_site_info[:,3])
+        
+        # ---------------------------------探空仪站点绘制------------------------------------------------------
+        # mx,my = m(y1,x1)
+        #plt.scatter(mx, my, marker='.', c='b', s=20, zorder=10, label="Global upper air sites")
+        k = 0
+        #for x, y, sn in zip(mx, my, upname):
+        ##    plt.scatter(x, y, marker='v', color=None, edgecolors='b', s=20, zorder=10)
+        #    plt.annotate(str(k), xy=(x,y), xytext=(x, y), fontsize = 5)
+        #    k = k+1
+        #-----------------------------------GPS/PWV-------------------------------------------------------------
+        s = self.site_qc1[0]
+        x = s[:, 0]
+        y = s[:, 1]
+        sitename = s[:, 3]
+        fx = list(x.astype(np.float64))
+        fy = list(y.astype(np.float64))
+        xs, ys = m(fx, fy)
+        plt.scatter(xs, ys, marker='.', c='g', s=20, zorder=10, label="GNSS")
+        plt.title('Distribution of GNSS stations')
+        # plt.legend(loc= "upper right")
+        # plt.ylabel("Latitude",fontdict={'family':'Times New Roman', 'size':14})
+        # plt.xlabel("Longitude", fontdict={'family':'Times New Roman', 'size':14})
+        labelss = plt.legend(loc='upper right').get_texts()
+        [label.set_fontname('Times New Roman') for label in labelss]
+        plt.savefig(self.pc_dir+self.name+"_site_loc.png", dpi=600)
+
+
+    def plot3(self, pwvsites:list, uppersites:list):
+        # --------------------------pwv数据--------------------------------------
+        pw, pwerr = [], []
+        with open(self.pwv_path + "sitepwvtimeordered.txt", 'r') as f:
+            for line in islice(f, 0, None):
+                pw.append(re.split(',', line)[1:-1])
+        with open(self.pwv_path + "sitepwverrtimeordered.txt", 'r') as f:
+            for line in islice(f, 0, None):
+                pwerr.append(re.split(',', line)[1:-1])
+        pw = np.array(pw, dtype=float)
+        # pwerr = np.array(pwerr, dtype=float)
+        index_a = [int(i[4]) for i in self.site_a]
+        pw_a = pw[index_a][:]
+        # pwerr_a = pwerr[index_a][:]
+        x0 = np.array([i for i in range(np.shape(pw_a)[1])])
+        x = x0.reshape((1,len(x0)))
+
+        # ----------------探空仪降水数据---------------
+        # 提取2018年9月 2-6号的数据
+        upper_xt = [i for i in range(0, 6*48, 2)]
+        upper_Datas = []
+        upper_sites =[]
+
+        with open(self.pc_dir + "探空降水量\\2562092Date.txt", 'r') as f:
+            for line in islice(f, 0, None):
+                upper_Datas.append(re.split('\t', line)[:])
+        with open(self.pc_dir + "探空降水量\\2562092siteInfo.txt", 'r') as f:
+            for line in islice(f, 0, None):
+                upper_sites.append(re.split('\t', line)[:])
+        us = []
+        for item in uppersites:
+            us.append(upper_sites[item][:])
+        t0 = [i for i in range(1,7)]
+        ud0 = []
+        for i in uppersites:
+            t1 = [item+i*30 for item in t0] 
+            for item in t1:
+                ud0.append(upper_Datas[item][:])
+        ud = np.zeros(shape=(30,24))
+        for i in range(30):
+            for j in range(1,25):
+                if ud0[i][j] != 'None':
+                    ud[i,j-1] = float(ud0[i][j])
+                else:
+                    ud[i,j-1] = 0
+        ud = np.array(ud).reshape((5,144))
+
+
+
+        plt.figure(figsize=(6,12))
+        i = 1
+        # 双y轴绘图
+        # pwv  ylim  数据范围40-60 显示范围[10 ,70]
+        # 降水资料
+        for each in uppersites:
+            ax1 = plt.subplot(len(pwvsites),1,i)
+            markerline, stemlines, baseline=ax1.stem(upper_xt,  ud[i-1,:], linefmt='r-', markerfmt='.', basefmt='--', label=upper_sites[each][3])
+            plt.setp(stemlines,lw=0.5)
+            plt.setp(markerline, lw=0.5,color='k',markersize=0.5)  # 将棉棒末端设置为黑色
+            plt.setp(baseline,lw=0.5)
+            
+            ax2 = ax1.twinx()
+            index = np.where(self.site_a==pwvsites[i-1])[0]
+            if len(index)==0:
+                print(pwvsites[i-1] + ' 找不到！\n')
+            ax2.scatter(x, pw_a[index][:], marker='.', s=10,color = 'b', label = pwvsites[i-1])
+
+            # if i != len(pwvsites):
+            #     plt.xticks([])
+            # else:
+            doy = [str(dd) for dd in range(self.duration[0]-1, self.duration[1])]
+            ll = [i * 2 * 24 for i in range(len(doy))]
+            ax2.set_xticks(ll, doy)
+            # ax2.set_yticks()
+            ax2.set_ylabel('GPS/PWV (mm)')
+            ax1.set_ylabel('Hourly Precipitation (m)')
+            ax2.set_xlim((0*48, 6*48))
+            ax2.set_ylim((10, 65))
+                       
+            
+            
+            
+            labelss = ax1.legend(loc='upper left').get_texts()
+            [label.set_fontname('Times New Roman') for label in labelss]
+
+            labelss = ax2.legend(loc='upper right').get_texts()
+            [label.set_fontname('Times New Roman') for label in labelss]
+            # label = labelss[0]
+            # label.set_fontproperties('SimSun')
+            # plt.show()
+            i = i+1 
+        
+        plt.savefig(self.pc_dir+"dsfasdfasdfasdfasdfa.png", dpi=600)
+
+        #
+
+
+
+        # 画site的pwv时间序列图
+        plt.figure(figsize=(6, 12))
+        i = 1
+        colors = ['r', 'g' ,'b', 'y', 'm', 'r']
+        for each in pwvsites:# TODO - 2021 04 11 待修改
+            plt.subplot(len(pwvsites),1,i)
+            index = np.where(self.site_a==each)[0]
+            if len(index)==0:
+                print(each + ' 找不到！\n')
+            plt.scatter(x, pw_a[index][:], marker='.', s=10,color = 'b', label = each)
+
+            if i != len(pwvsites):
+                plt.xticks([])
+            else:
+                doy = [str(dd) for dd in range(self.duration[0]-1, self.duration[1])]
+                ll = [i * 2 * 24 for i in range(len(doy))]
+                plt.xticks(ll, doy)
+            plt.xlim((0*48, 6*48))
+            plt.ylim((10, 65))
+            plt.legend(loc = 'upper right')
+            i = i+1
+
+        # plt.title(str(h.year) + " " + str(h.duration[0]) + "-" + str(
+        #     h.duration[1]) + " Hurricane " + h.name + " PWV time series ()")
+        # plt.xlabel("time(interval:30min)")
+        # plt.ylabel("PW(mm)")
+        # plt.legend(legend, fontsize=5, loc='best')
+        plt.savefig(self.pc_dir + 'plot\\' + "pwv+hourlyPrepicition.png", dpi=500)
 

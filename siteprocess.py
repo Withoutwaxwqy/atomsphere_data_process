@@ -44,7 +44,7 @@ def site_write_for_pyecharts_add(site_list, savepath):
 #
 # def site_quantity_test(sitelist:tuple, year:int):
 #
-#     SUOd_dir = "E:\\论文\\毕业论文\\PWVDATA\\SUOd_" + str(year)+"\\"
+#     SUOd_dir = "D:\\acdemic\\毕业论文\\PWVDATA\\SUOd_" + str(year)+"\\"
 #     path_list_all = os.listdir(SUOd_dir)
 #     path_list_pwv = []
 #     for each in path_list_all:

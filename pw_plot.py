@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+plt.rc('font', family='Times New Roman',size=10)
 import re
 from itertools import islice
 import numpy as np
@@ -65,6 +66,8 @@ def series_site_pwv_plot(h:Hurricane, sitenames:list):
         index = np.where(h.site_a==each)[0]
         if len(index)==0:
             print(each + ' 找不到！\n')
+        # x11 = pw_a[index][:]
+        # print(str(x.shape) + '------' + str(x11.shape) + '\n')
         plt.scatter(x, pw_a[index][:], marker='.', s=10,color = 'b', label = each)
         if i != len(sitenames):
             plt.xticks([])
@@ -113,7 +116,8 @@ def single_site_pwv_plot(h:Hurricane):
     doy = [str(dd) for dd in range(h.duration[0] - 1, h.duration[1])]
     ll = [i * 2 * 24 for i in range(len(doy))]
     sites = h.site_qc1[0]
-    for i in range(np.shape(sites)[0]):
+    for i in range(np.shape(sites)[0]): # 画全部站点
+    #for i in range(20):
         each = sites[i][3]
         plt.figure()
         index = np.where(h.site_a == each)[0]
@@ -121,5 +125,51 @@ def single_site_pwv_plot(h:Hurricane):
         plt.xticks(ll, doy)
         plt.xlim((0 * 48, len(doy) * 48))
         plt.ylim((10, 70))
-        plt.title(each+" PWV ")
-        plt.savefig(path+each+"_pwv.png", dpi=500)
+        plt.title(each+": 2018090200:00-2018090800:00                          "+str(len(x))+ ' times')
+        plt.ylabel('Y GPS-PWV(mm)')
+        plt.xlabel('X Times(0.5 hour)')
+        plt.grid(which = 'major')
+        plt.savefig(path+each+"_pwv_new.png", dpi=500, transparent=True)
+        plt.close()
+
+
+def plot_many_site_in_one_fig(h: Hurricane, sitenames: list):
+    """
+    绘图， 将多个PWV序列绘制在一个图幅里面
+    :param h:
+    :param sites:
+    :return:
+    """
+    path = h.pc_dir + 'multi_site_pwv_plot\\'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    pw, pwerr = [], []
+    with open(h.pwv_path + "sitepwvtimeordered.txt", 'r') as f:
+        for line in islice(f, 0, None):
+            pw.append(re.split(',', line)[1:-1])
+    with open(h.pwv_path + "sitepwverrtimeordered.txt", 'r') as f:
+        for line in islice(f, 0, None):
+            pwerr.append(re.split(',', line)[1:-1])
+    pw = np.array(pw, dtype=float)
+    index_a = [int(i[4]) for i in h.site_a]
+    pw_a = pw[index_a][:]
+    x0 = np.array([i for i in range(np.shape(pw_a)[1])])
+    x = x0.reshape((1, len(x0)))
+    doy = [str(dd) for dd in range(h.duration[0] - 1, h.duration[1]+1)]
+    ll = [i * 2 * 24 for i in range(len(doy))]
+    sites = h.site_qc1[0]
+    plt.figure()
+    for each in sitenames:
+        index = np.where(h.site_a == each)[0]
+        if len(index) == 0:
+            print(each + ' 找不到！\n')
+        # x11 = pw_a[index][:]
+        # print(str(x.shape) + '------' + str(x11.shape) + '\n')
+        plt.scatter(x, pw_a[index][:], marker='.', s=10, label=each)
+
+    plt.xticks(ll, doy)
+    plt.xlim((0 * 48, 6 * 48))
+    plt.ylim((-10, 65))
+    plt.legend(loc='upper right')
+    plt.savefig(path+'multi_site_pwv.png', dpi=500, transparent=True)
+    plt.close()
